@@ -52,6 +52,58 @@ SCRT2 returns **HTTP 200 OK regardless of whether verification succeeded or fail
 
 ---
 
+## Demo Shortcuts vs Production Reality
+
+This project is **self-contained** — everything runs inside one Salesforce org with no external dependencies. To achieve this, we take two shortcuts that would work differently in production:
+
+### JWT Signing (Step 1)
+
+| | This Demo | Production |
+|---|---|---|
+| **Who signs the JWT?** | A Salesforce Apex endpoint (`AgentAPI_JwtRestEndpoint`) signs it using a self-signed certificate stored in the org | Your **Identity Provider** (Okta, Auth0, Azure AD, Ping, custom) signs it after the user authenticates |
+| **Where does the private key live?** | In the SF org's Certificate and Key Management (`AgentVerifyCert`) | In your IdP — Salesforce never sees the private key |
+| **How does the user get a token?** | The demo calls a public REST endpoint that returns a pre-signed JWT for a hardcoded subject | The user logs in via your IdP's authentication flow (OIDC, SAML, etc.) and receives an ID token or access token |
+
+### JWKS Endpoint (What SCRT2 Fetches)
+
+| | This Demo | Production |
+|---|---|---|
+| **JWKS URL** | Served from Salesforce Site via `AgentAPI_Step4_JwksEndpoint` — an Apex class that reads the public key from a Static Resource | Your IdP's standard JWKS endpoint (e.g. `https://your-tenant.okta.com/oauth2/default/v1/keys`) |
+| **Key management** | Manual: export cert → extract modulus/exponent via openssl → upload as Static Resource | Automatic: your IdP manages key rotation, publishes keys at its JWKS URL |
+| **Registered in SF** | User Verification settings point to the SF Site JWKS URL | User Verification settings point to your IdP's JWKS URL |
+
+### How It Would Work with a Real IdP
+
+```mermaid
+sequenceDiagram
+    participant User as End User
+    participant App as Your App
+    participant IdP as Identity Provider<br/>(Okta, Auth0, etc.)
+    participant SCRT2 as SCRT2 Gateway
+    participant Agent as Salesforce Agent
+
+    User->>App: Opens chat
+    App->>IdP: Redirect to login
+    User->>IdP: Enters credentials
+    IdP-->>App: ID Token (JWT signed by IdP)
+
+    App->>SCRT2: POST /access-token + IdP JWT
+    Note over SCRT2: Fetches JWKS from IdP<br/>Validates signature + claims
+    SCRT2-->>App: MIAW Token (AUTH)
+
+    App->>SCRT2: POST /conversation + POST /message
+    SCRT2->>Agent: Verified identity context
+    Agent-->>App: Response via SSE
+```
+
+The **only things that change** when moving to a real IdP:
+1. Replace the Apex JWT endpoint with your IdP's login flow
+2. Point the User Verification JWKS URL to your IdP's JWKS endpoint
+3. Update the issuer to match your IdP's issuer claim
+4. Steps 2–6 (token exchange, conversation, SSE, messaging) stay **identical**
+
+---
+
 ## Project Structure
 
 ```
