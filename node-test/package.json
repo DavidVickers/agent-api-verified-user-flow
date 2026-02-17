@@ -1,0 +1,13 @@
+{
+  "name": "miaw-node-test",
+  "version": "1.0.0",
+  "description": "Node.js CLI test — MIAW Verified User Flow with SSE (§5.2)",
+  "main": "agent-api-test.js",
+  "scripts": {
+    "start": "node agent-api-test.js",
+    "test": "node agent-api-test.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  }
+}
